@@ -1,4 +1,4 @@
-# Cloud cost phase 2 lab proof (6 Nov 2026): a workflow with no environment and no deployment, so its only job is side-effect free and can be routed by Helio.
+# Cloud cost phase 2 lab proof (6 Nov 2026): the lint-check job has no environment and no deployment, so it is side-effect free and can be routed by Helio; release-marker (fixed label, not routed) carries the target environment so a release can launch.
 name: cost-lint
 run-name: ${{ inputs.helio_execution_id || github.run_id }}
 
@@ -43,3 +43,15 @@ jobs:
         run: |
           echo "runner: $RUNNER_NAME ($RUNNER_OS $RUNNER_ARCH)"
           python3 -c "import json; json.loads('{}'); print('lint ok')"
+
+  release-marker:
+    needs: lint-check
+    runs-on: [self-hosted, pilot-lab]
+    environment: pilot-service-prod
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - name: Record the release marker
+        shell: bash
+        run: echo "release marker"
