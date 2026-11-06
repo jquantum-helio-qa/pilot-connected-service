@@ -49,7 +49,7 @@ concurrency:
 jobs:
   build:
     if: ${{ inputs.deployment_only != 'true' }}
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, Linux, X64, pilot-lab]
     timeout-minutes: 10
     outputs:
       artifact_digest: ${{ steps.artifact.outputs.digest }}
@@ -73,7 +73,7 @@ jobs:
   deploy:
     needs: build
     if: ${{ always() && (needs.build.result == 'success' || (inputs.deployment_only == 'true' && needs.build.result == 'skipped')) }}
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, Linux, X64, pilot-lab]
     timeout-minutes: 10
     environment: pilot-service-prod
     steps:
@@ -114,11 +114,31 @@ jobs:
           api="https://api.github.com/repos/$GITHUB_REPOSITORY"
           deployment_id="$(curl -fsS -X POST -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" "$api/deployments" --data @deployment-evidence.json | python3 -c 'import json,sys;print(json.load(sys.stdin)["id"])')"
           curl -fsS -X POST -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" "$api/deployments/$deployment_id/statuses" --data '{"state":"success","description":"Synthetic artifact installed; digest recorded"}' > /dev/null
+          # Lab stand-in target: publish version and digest where the lab nginx serves /pilot-service/ (health.json, digest.json).
+          # Present only on the helio-lab box; the step is skipped elsewhere.
+          target=/var/www/pilot-service
+          if [ -d "$target" ] && [ -w "$target" ]; then
+            python3 - "$target" <<'PY'
+          import json, os, re, sys, tempfile
+          rollback = os.environ["DEPLOYMENT_ONLY"] == "true"
+          digest = os.environ["PINNED_DIGEST"] if rollback else os.environ["BUILT_DIGEST"]
+          version = os.environ["RELEASE_VERSION"] or "unversioned"
+          assert re.fullmatch(r"sha256:[0-9a-f]{64}", digest)
+          for name, body in (("health.json", {"status": "ok", "version": version, "digest": digest}),
+                             ("digest.json", {"digest": digest})):
+              fd, tmp = tempfile.mkstemp(dir=sys.argv[1])
+              with os.fdopen(fd, "w") as f:
+                  json.dump(body, f, sort_keys=True)
+              os.chmod(tmp, 0o644)
+              os.replace(tmp, os.path.join(sys.argv[1], name))
+          print("published", digest, "to the lab stand-in target")
+          PY
+          fi
 
   verify:
     needs: deploy
     if: ${{ inputs.deployment_only != 'true' }}
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, Linux, X64, pilot-lab]
     timeout-minutes: 15
     steps:
       - name: Post-deployment verification
