@@ -1,0 +1,45 @@
+# Cloud cost phase 2 lab proof (6 Nov 2026): a workflow with no environment and no deployment, so its only job is side-effect free and can be routed by Helio.
+name: cost-lint
+run-name: ${{ inputs.helio_execution_id || github.run_id }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      helio_runner_target:
+        type: string
+        required: false
+        default: '["self-hosted","Linux","X64","pilot-lab"]'
+      helio_attempt:
+        type: string
+        required: false
+        default: ''
+      helio_execution_id:
+        type: string
+        required: false
+        default: ''
+      helio_release_id:
+        type: string
+        required: false
+        default: ''
+      workflow_revision:
+        type: string
+        required: false
+        default: ''
+      release_version:
+        type: string
+        required: false
+        default: ''
+
+permissions:
+  contents: read
+
+jobs:
+  lint-check:
+    runs-on: ${{ fromJSON(inputs.helio_runner_target) }}
+    timeout-minutes: 5
+    steps:
+      - name: Side-effect-free check
+        shell: bash
+        run: |
+          echo "runner: $RUNNER_NAME ($RUNNER_OS $RUNNER_ARCH)"
+          python3 -c "import json; json.loads('{}'); print('lint ok')"
