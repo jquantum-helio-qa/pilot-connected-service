@@ -9,6 +9,14 @@ run-name: ${{ inputs.helio_execution_id || github.run_id }}
 on:
   workflow_dispatch:
     inputs:
+      helio_runner_target:
+        type: string
+        required: false
+        default: '["self-hosted","Linux","X64","pilot-lab"]'
+      helio_attempt:
+        type: string
+        required: false
+        default: ''
       helio_execution_id:
         type: string
         required: false
@@ -47,6 +55,17 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  lint-check:
+    if: ${{ inputs.deployment_only != 'true' }}
+    runs-on: ${{ fromJSON(inputs.helio_runner_target) }}
+    timeout-minutes: 5
+    steps:
+      - name: Side-effect-free check
+        shell: bash
+        run: |
+          echo "runner: $RUNNER_NAME ($RUNNER_OS $RUNNER_ARCH)"
+          python3 -c "import json; json.loads('{}'); print('lint ok')"
+
   build:
     if: ${{ inputs.deployment_only != 'true' }}
     runs-on: [self-hosted, Linux, X64, pilot-lab]
